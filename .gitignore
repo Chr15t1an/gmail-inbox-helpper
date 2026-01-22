@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+.venv/
+
+# Credentials (NEVER commit these)
+credentials.json
+token.json
+*.token.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Playwright MCP downloads (may contain credentials)
+.playwright-mcp/

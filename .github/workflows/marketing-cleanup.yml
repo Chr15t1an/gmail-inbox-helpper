@@ -1,0 +1,57 @@
+name: Marketing Email Cleanup
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Every 15 minutes
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        account:
+          - name: conveyour
+            secret_suffix: CONVEYOUR
+          - name: chri5tian
+            secret_suffix: CHRI5TIAN
+          - name: campbell
+            secret_suffix: CAMPBELL
+      fail-fast: false  # Continue other accounts if one fails
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check if enabled
+        id: check
+        run: |
+          ENABLED_VAR="ENABLE_MARKETING_${{ matrix.account.secret_suffix }}"
+          ENABLED="${!ENABLED_VAR:-true}"
+          echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+        env:
+          ENABLE_MARKETING_CONVEYOUR: ${{ vars.ENABLE_MARKETING_CONVEYOUR }}
+          ENABLE_MARKETING_CHRI5TIAN: ${{ vars.ENABLE_MARKETING_CHRI5TIAN }}
+          ENABLE_MARKETING_CAMPBELL: ${{ vars.ENABLE_MARKETING_CAMPBELL }}
+
+      - name: Run marketing cleanup
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: src
+        run: python marketing_cleanup.py
+        env:
+          ACCOUNT_NAME: ${{ matrix.account.name }}
+          GMAIL_TOKEN: ${{ secrets[format('GMAIL_TOKEN_{0}', matrix.account.secret_suffix)] }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_D1_DATABASE_ID: ${{ secrets.CF_D1_DATABASE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          MAX_EMAILS_PER_PAGE: '50'
+          MAX_PAGES: '3'
