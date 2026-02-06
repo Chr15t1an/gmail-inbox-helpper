@@ -7,7 +7,7 @@ Automated email cleanup using GitHub Actions. Classifies and organizes emails fr
 - **Marketing Email Cleanup**: Classifies emails as MARKETING/PERSONAL, labels marketing emails with "AI Assist" and archives them
 - **Job Application Cleanup**: Identifies job-related emails, labels them appropriately, and flags emails needing follow-up
 - **Multi-Account Support**: Processes 3 Gmail accounts in parallel
-- **Scheduled Execution**: Marketing cleanup every 15 minutes, job app cleanup every 30 minutes
+- **Scheduled Execution**: Runs every 6 hours via GitHub Actions cron (and Cloudflare Worker trigger)
 - **Per-Account Toggles**: Enable/disable features per account via GitHub Variables
 
 ## Setup

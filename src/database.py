@@ -1,55 +1,61 @@
-"""Database service for tracking processed emails using Cloudflare D1."""
+"""Database service for tracking processed emails using local SQLite."""
 
 import os
-import json
+import sqlite3
+from pathlib import Path
 from typing import List, Optional
-import urllib.request
-import urllib.error
 
 
 class Database:
-    """Cloudflare D1 database client using REST API."""
+    """Local SQLite database client."""
 
-    def __init__(self):
-        self.account_id = os.environ.get('CF_ACCOUNT_ID')
-        self.database_id = os.environ.get('CF_D1_DATABASE_ID')
-        self.api_token = os.environ.get('CF_API_TOKEN')
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            # Default: data/gmail_helper.db relative to project root
+            project_root = Path(__file__).parent.parent
+            data_dir = project_root / 'data'
+            data_dir.mkdir(exist_ok=True)
+            db_path = str(data_dir / 'gmail_helper.db')
 
-        if not all([self.account_id, self.database_id, self.api_token]):
-            raise ValueError(
-                "CF_ACCOUNT_ID, CF_D1_DATABASE_ID, and CF_API_TOKEN environment variables required"
-            )
+        self.db_path = db_path
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
+        self._init_schema()
 
-        self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/d1/database/{self.database_id}/query"
+    def _init_schema(self):
+        """Create tables if they don't exist."""
+        self.conn.executescript("""
+            CREATE TABLE IF NOT EXISTS processed_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_name TEXT NOT NULL,
+                email_id TEXT NOT NULL,
+                classification TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(account_name, email_id)
+            );
 
-    def _execute(self, sql: str, params: List = None) -> dict:
-        """Execute a SQL query against D1."""
-        payload = {"sql": sql}
-        if params:
-            payload["params"] = params
+            CREATE INDEX IF NOT EXISTS idx_processed_emails_account_email
+            ON processed_emails(account_name, email_id);
 
-        data = json.dumps(payload).encode('utf-8')
-        headers = {
-            'Authorization': f'Bearer {self.api_token}',
-            'Content-Type': 'application/json',
-        }
+            CREATE TABLE IF NOT EXISTS job_application_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_name TEXT NOT NULL,
+                email_id TEXT NOT NULL,
+                is_job_related INTEGER NOT NULL DEFAULT 0,
+                needs_followup INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(account_name, email_id)
+            );
 
-        req = urllib.request.Request(self.base_url, data=data, headers=headers, method='POST')
-
-        try:
-            with urllib.request.urlopen(req) as response:
-                result = json.loads(response.read().decode('utf-8'))
-                if not result.get('success'):
-                    errors = result.get('errors', [])
-                    raise Exception(f"D1 query failed: {errors}")
-                return result
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            raise Exception(f"D1 API error ({e.code}): {error_body}")
+            CREATE INDEX IF NOT EXISTS idx_job_app_emails_account_email
+            ON job_application_emails(account_name, email_id);
+        """)
+        self.conn.commit()
 
     def close(self):
-        """No-op for REST API client."""
-        pass
+        """Close the database connection."""
+        if self.conn:
+            self.conn.close()
 
     # Marketing emails
     def get_processed_marketing_ids(self, account_name: str, email_ids: List[str]) -> List[str]:
@@ -57,17 +63,14 @@ class Database:
         if not email_ids:
             return []
 
-        # D1 doesn't support arrays, so we use IN with placeholders
         placeholders = ','.join(['?' for _ in email_ids])
         sql = f"""
             SELECT email_id FROM processed_emails
             WHERE account_name = ? AND email_id IN ({placeholders})
         """
         params = [account_name] + email_ids
-
-        result = self._execute(sql, params)
-        rows = result.get('result', [{}])[0].get('results', [])
-        return [row['email_id'] for row in rows]
+        cursor = self.conn.execute(sql, params)
+        return [row['email_id'] for row in cursor.fetchall()]
 
     def record_marketing_processed(self, account_name: str, email_id: str, classification: str):
         """Record a processed marketing email."""
@@ -76,7 +79,8 @@ class Database:
             VALUES (?, ?, ?)
             ON CONFLICT (account_name, email_id) DO NOTHING
         """
-        self._execute(sql, [account_name, email_id, classification])
+        self.conn.execute(sql, [account_name, email_id, classification])
+        self.conn.commit()
 
     # Job application emails
     def get_processed_job_app_ids(self, account_name: str, email_ids: List[str]) -> List[str]:
@@ -90,10 +94,8 @@ class Database:
             WHERE account_name = ? AND email_id IN ({placeholders})
         """
         params = [account_name] + email_ids
-
-        result = self._execute(sql, params)
-        rows = result.get('result', [{}])[0].get('results', [])
-        return [row['email_id'] for row in rows]
+        cursor = self.conn.execute(sql, params)
+        return [row['email_id'] for row in cursor.fetchall()]
 
     def record_job_app_processed(
         self,
@@ -109,9 +111,10 @@ class Database:
             VALUES (?, ?, ?, ?)
             ON CONFLICT (account_name, email_id) DO NOTHING
         """
-        self._execute(sql, [
+        self.conn.execute(sql, [
             account_name,
             email_id,
             1 if is_job_related else 0,
             1 if needs_followup else (0 if needs_followup is False else None)
         ])
+        self.conn.commit()
