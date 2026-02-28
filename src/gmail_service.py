@@ -6,10 +6,27 @@ import os
 import re
 from typing import Dict, List, Optional, Any
 
+import requests as req_lib
+from requests.adapters import HTTPAdapter
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+# Timeout for token refresh HTTP requests (seconds)
+REFRESH_TIMEOUT = 30
+
+
+class _TimeoutAdapter(HTTPAdapter):
+    """HTTPAdapter that enforces a default timeout on all requests."""
+
+    def __init__(self, timeout=REFRESH_TIMEOUT, **kwargs):
+        self.timeout = timeout
+        super().__init__(**kwargs)
+
+    def send(self, request, **kwargs):
+        kwargs.setdefault('timeout', self.timeout)
+        return super().send(request, **kwargs)
 
 
 class GmailTokenExpiredError(Exception):
@@ -40,14 +57,30 @@ class GmailService:
             scopes=self.token_data.get('scopes', ['https://www.googleapis.com/auth/gmail.modify'])
         )
 
-        # Refresh if expired
+        # Refresh if expired (with timeout to prevent hanging)
         if creds.expired and creds.refresh_token:
             try:
-                creds.refresh(Request())
+                session = req_lib.Session()
+                session.mount('https://', _TimeoutAdapter(timeout=REFRESH_TIMEOUT))
+                creds.refresh(Request(session=session))
             except Exception as e:
                 raise GmailTokenExpiredError(f"Token refresh failed: {e}")
 
         return creds
+
+    def validate_token(self):
+        """Validate token with a lightweight API call.
+
+        Raises GmailTokenExpiredError if the token is invalid.
+        """
+        try:
+            self.service.users().getProfile(userId='me').execute()
+        except HttpError as e:
+            if e.resp.status == 401:
+                raise GmailTokenExpiredError(
+                    "Token validation failed: authentication rejected"
+                )
+            raise
 
     def list_messages(
         self,

@@ -141,6 +141,19 @@ class GmailWatcher(rumps.App):
                 has_errors = True
                 continue
 
+            # Validate token before processing
+            try:
+                gmail.validate_token()
+                logger.info(f"[{name}] Token validated")
+            except GmailTokenExpiredError as e:
+                logger.error(f"[{name}] Token validation failed — skipping: {e}")
+                has_errors = True
+                continue
+            except Exception as e:
+                logger.error(f"[{name}] Token validation error — skipping: {e}")
+                has_errors = True
+                continue
+
             # Marketing cleanup
             if account_toggles.get('marketing', False):
                 logger.info(f"[{name}] Running marketing cleanup...")
