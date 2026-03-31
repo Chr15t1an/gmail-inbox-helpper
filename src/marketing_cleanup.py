@@ -89,5 +89,8 @@ def run_marketing_cleanup(
     except GmailTokenExpiredError as e:
         logger.error(f"[{account_name}] Gmail token expired during processing: {e}")
         result['error'] = f"Token expired: {e}"
+    except Exception as e:
+        logger.error(f"[{account_name}] Marketing cleanup failed: {e}")
+        result['error'] = str(e)
 
     return result

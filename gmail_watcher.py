@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +24,9 @@ from config import (
 from gmail_service import GmailService, GmailTokenExpiredError
 from classifier import EmailClassifier
 from database import Database
+
+# Max time (seconds) for a single account's entire cleanup before we give up
+ACCOUNT_TIMEOUT = 300  # 5 minutes
 
 # Logging setup
 LOG_FILE = PROJECT_ROOT / 'watcher.log'
@@ -106,7 +110,6 @@ class GmailWatcher(rumps.App):
         logger.info("=" * 60)
 
         toggles = get_feature_toggles()
-        db = Database()
         has_errors = False
 
         try:
@@ -122,74 +125,18 @@ class GmailWatcher(rumps.App):
             name = account['name']
             account_toggles = toggles.get(name, {})
 
-            # Load token
             try:
-                token_json = load_token(name)
-            except FileNotFoundError as e:
-                logger.warning(f"[{name}] Skipping — no token file: {e}")
-                continue
-
-            # Init Gmail service
-            try:
-                gmail = GmailService(token_json)
-            except GmailTokenExpiredError as e:
-                logger.error(f"[{name}] Token expired: {e}")
-                has_errors = True
-                continue
-            except Exception as e:
-                logger.error(f"[{name}] Failed to init Gmail service: {e}")
-                has_errors = True
-                continue
-
-            # Validate token before processing
-            try:
-                gmail.validate_token()
-                logger.info(f"[{name}] Token validated")
-            except GmailTokenExpiredError as e:
-                logger.error(f"[{name}] Token validation failed — skipping: {e}")
-                has_errors = True
-                continue
-            except Exception as e:
-                logger.error(f"[{name}] Token validation error — skipping: {e}")
-                has_errors = True
-                continue
-
-            # Marketing cleanup
-            if account_toggles.get('marketing', False):
-                logger.info(f"[{name}] Running marketing cleanup...")
-                from marketing_cleanup import run_marketing_cleanup
-                result = run_marketing_cleanup(
-                    gmail, classifier, db, name,
-                    max_emails=MAX_EMAILS_PER_PAGE, max_pages=MAX_PAGES,
+                error = self._process_account(
+                    name, account_toggles, classifier
                 )
-                logger.info(
-                    f"[{name}] Marketing: {result['processed']} processed, "
-                    f"{result['skipped']} skipped, {result['marketing_found']} marketing archived"
-                )
-                if result.get('error'):
+                if error:
                     has_errors = True
-            else:
-                logger.info(f"[{name}] Marketing cleanup disabled")
-
-            # Job app cleanup
-            if account_toggles.get('jobapp', False):
-                logger.info(f"[{name}] Running job app cleanup...")
-                from job_app_cleanup import run_job_app_cleanup
-                result = run_job_app_cleanup(
-                    gmail, classifier, db, name,
-                    max_emails=MAX_EMAILS_PER_PAGE, max_pages=MAX_PAGES,
-                )
-                logger.info(
-                    f"[{name}] Job apps: {result['processed']} processed, "
-                    f"{result['skipped']} skipped, {result['job_related_found']} job-related, "
-                    f"{result['needs_followup_found']} need follow-up"
-                )
-                if result.get('error'):
-                    has_errors = True
-            else:
-                logger.info(f"[{name}] Job app cleanup disabled")
-
-        db.close()
+            except FuturesTimeoutError:
+                logger.error(f"[{name}] Account cleanup timed out after {ACCOUNT_TIMEOUT}s — skipping")
+                has_errors = True
+            except Exception as e:
+                logger.error(f"[{name}] Unexpected error: {e}")
+                has_errors = True
 
         now = datetime.now()
         self.last_run_item.title = f"Last Run: {now.strftime('%m/%d %H:%M')}"
@@ -204,6 +151,93 @@ class GmailWatcher(rumps.App):
         logger.info("Cleanup cycle complete")
         logger.info("=" * 60)
         self.is_processing = False
+
+    def _process_account(self, name, account_toggles, classifier):
+        """Process a single account with a timeout guard. Returns True if errors occurred."""
+        has_errors = False
+
+        def _do_work():
+            nonlocal has_errors
+
+            # Create DB connection in this thread (SQLite requires same-thread usage)
+            db = Database()
+
+            try:
+                # Load token
+                try:
+                    token_json = load_token(name)
+                except FileNotFoundError as e:
+                    logger.warning(f"[{name}] Skipping — no token file: {e}")
+                    return
+
+                # Init Gmail service
+                try:
+                    gmail = GmailService(token_json)
+                except GmailTokenExpiredError as e:
+                    logger.error(f"[{name}] Token expired: {e}")
+                    has_errors = True
+                    return
+                except Exception as e:
+                    logger.error(f"[{name}] Failed to init Gmail service: {e}")
+                    has_errors = True
+                    return
+
+                # Validate token before processing
+                try:
+                    gmail.validate_token()
+                    logger.info(f"[{name}] Token validated")
+                except GmailTokenExpiredError as e:
+                    logger.error(f"[{name}] Token validation failed — skipping: {e}")
+                    has_errors = True
+                    return
+                except Exception as e:
+                    logger.error(f"[{name}] Token validation error — skipping: {e}")
+                    has_errors = True
+                    return
+
+                # Marketing cleanup
+                if account_toggles.get('marketing', False):
+                    logger.info(f"[{name}] Running marketing cleanup...")
+                    from marketing_cleanup import run_marketing_cleanup
+                    result = run_marketing_cleanup(
+                        gmail, classifier, db, name,
+                        max_emails=MAX_EMAILS_PER_PAGE, max_pages=MAX_PAGES,
+                    )
+                    logger.info(
+                        f"[{name}] Marketing: {result['processed']} processed, "
+                        f"{result['skipped']} skipped, {result['marketing_found']} marketing archived"
+                    )
+                    if result.get('error'):
+                        has_errors = True
+                else:
+                    logger.info(f"[{name}] Marketing cleanup disabled")
+
+                # Job app cleanup
+                if account_toggles.get('jobapp', False):
+                    logger.info(f"[{name}] Running job app cleanup...")
+                    from job_app_cleanup import run_job_app_cleanup
+                    result = run_job_app_cleanup(
+                        gmail, classifier, db, name,
+                        max_emails=MAX_EMAILS_PER_PAGE, max_pages=MAX_PAGES,
+                    )
+                    logger.info(
+                        f"[{name}] Job apps: {result['processed']} processed, "
+                        f"{result['skipped']} skipped, {result['job_related_found']} job-related, "
+                        f"{result['needs_followup_found']} need follow-up"
+                    )
+                    if result.get('error'):
+                        has_errors = True
+                else:
+                    logger.info(f"[{name}] Job app cleanup disabled")
+            finally:
+                db.close()
+
+        # Run with timeout so a single account can't block the whole cycle
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_do_work)
+            future.result(timeout=ACCOUNT_TIMEOUT)
+
+        return has_errors
 
     def update_next_run(self):
         if self.next_run_time:

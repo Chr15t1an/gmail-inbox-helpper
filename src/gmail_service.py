@@ -6,15 +6,20 @@ import os
 import re
 from typing import Dict, List, Optional, Any
 
+import httplib2
 import requests as req_lib
 from requests.adapters import HTTPAdapter
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google_auth_httplib2 import AuthorizedHttp
 
 # Timeout for token refresh HTTP requests (seconds)
 REFRESH_TIMEOUT = 30
+
+# Timeout for Gmail API calls (seconds)
+API_TIMEOUT = 60
 
 
 class _TimeoutAdapter(HTTPAdapter):
@@ -44,7 +49,10 @@ class GmailService:
         """
         self.token_data = json.loads(token_json)
         self.creds = self._create_credentials()
-        self.service = build('gmail', 'v1', credentials=self.creds)
+        # Use httplib2 with a timeout so API calls cannot hang indefinitely
+        http = httplib2.Http(timeout=API_TIMEOUT)
+        authorized_http = AuthorizedHttp(self.creds, http=http)
+        self.service = build('gmail', 'v1', http=authorized_http)
 
     def _create_credentials(self) -> Credentials:
         """Create and refresh credentials if needed."""
