@@ -123,11 +123,12 @@ class GmailWatcher(rumps.App):
 
         for account in ACCOUNTS:
             name = account['name']
+            email = account['email']
             account_toggles = toggles.get(name, {})
 
             try:
                 error = self._process_account(
-                    name, account_toggles, classifier
+                    name, email, account_toggles, classifier
                 )
                 if error:
                     has_errors = True
@@ -152,7 +153,7 @@ class GmailWatcher(rumps.App):
         logger.info("=" * 60)
         self.is_processing = False
 
-    def _process_account(self, name, account_toggles, classifier):
+    def _process_account(self, name, account_email, account_toggles, classifier):
         """Process a single account with a timeout guard. Returns True if errors occurred."""
         has_errors = False
 
@@ -229,6 +230,24 @@ class GmailWatcher(rumps.App):
                         has_errors = True
                 else:
                     logger.info(f"[{name}] Job app cleanup disabled")
+
+                # General cleanup
+                if account_toggles.get('general', False):
+                    logger.info(f"[{name}] Running general cleanup...")
+                    from general_cleanup import run_general_cleanup
+                    result = run_general_cleanup(
+                        gmail, classifier, db, name, account_email,
+                        max_emails=MAX_EMAILS_PER_PAGE, max_pages=MAX_PAGES,
+                    )
+                    logger.info(
+                        f"[{name}] General: {result['processed']} processed, "
+                        f"{result['skipped']} skipped, {result['rule_filtered']} rule-filtered, "
+                        f"{result['ai_classified']} AI-classified, {result['archived']} archived"
+                    )
+                    if result.get('error'):
+                        has_errors = True
+                else:
+                    logger.info(f"[{name}] General cleanup disabled")
             finally:
                 db.close()
 

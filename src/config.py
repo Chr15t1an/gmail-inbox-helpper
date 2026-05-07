@@ -34,6 +34,7 @@ def _load_accounts():
             'token_file': f'{n}.json',
             'marketing': os.environ.get(f'ACCOUNT_{n}_MARKETING', 'true').lower() == 'true',
             'jobapp': os.environ.get(f'ACCOUNT_{n}_JOBAPP', 'false').lower() == 'true',
+            'general': os.environ.get(f'ACCOUNT_{n}_GENERAL', 'false').lower() == 'true',
         })
         n += 1
     return accounts
@@ -48,6 +49,7 @@ def get_feature_toggles():
         account['name']: {
             'marketing': account['marketing'],
             'jobapp': account['jobapp'],
+            'general': account['general'],
         }
         for account in ACCOUNTS
     }

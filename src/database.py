@@ -49,6 +49,19 @@ class Database:
 
             CREATE INDEX IF NOT EXISTS idx_job_app_emails_account_email
             ON job_application_emails(account_name, email_id);
+
+            CREATE TABLE IF NOT EXISTS general_cleanup_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_name TEXT NOT NULL,
+                email_id TEXT NOT NULL,
+                classification TEXT NOT NULL,
+                matched_rule TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(account_name, email_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_general_cleanup_account_email
+            ON general_cleanup_emails(account_name, email_id);
         """)
         self.conn.commit()
 
@@ -96,6 +109,31 @@ class Database:
         params = [account_name] + email_ids
         cursor = self.conn.execute(sql, params)
         return [row['email_id'] for row in cursor.fetchall()]
+
+    # General cleanup emails
+    def get_processed_general_ids(self, account_name: str, email_ids: List[str]) -> List[str]:
+        """Get IDs of emails that have already been processed by general cleanup."""
+        if not email_ids:
+            return []
+
+        placeholders = ','.join(['?' for _ in email_ids])
+        sql = f"""
+            SELECT email_id FROM general_cleanup_emails
+            WHERE account_name = ? AND email_id IN ({placeholders})
+        """
+        params = [account_name] + email_ids
+        cursor = self.conn.execute(sql, params)
+        return [row['email_id'] for row in cursor.fetchall()]
+
+    def record_general_processed(self, account_name: str, email_id: str, classification: str, matched_rule: str = None):
+        """Record a processed general cleanup email."""
+        sql = """
+            INSERT INTO general_cleanup_emails (account_name, email_id, classification, matched_rule)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (account_name, email_id) DO NOTHING
+        """
+        self.conn.execute(sql, [account_name, email_id, classification, matched_rule])
+        self.conn.commit()
 
     def record_job_app_processed(
         self,

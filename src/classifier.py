@@ -65,6 +65,64 @@ Is this a MARKETING email or a PERSONAL email?"""
             print(f"Classification error: {e}")
             return 'PERSONAL'  # Default to personal on error (don't archive)
 
+    def classify_general(self, email: Dict) -> str:
+        """
+        Classify email into general categories.
+
+        Returns one of: RECEIPT, COLD_OUTREACH, NOTIFICATION, NEEDS_ATTENTION, OTHER
+        """
+        from_addr = email.get('from', 'Unknown sender')
+        subject = email.get('subject', 'No subject')
+        snippet = email.get('snippet', '')
+        body = (email.get('body') or '')[:500]
+
+        prompt = f"""Classify this email into one category:
+
+From: {from_addr}
+Subject: {subject}
+Preview: {snippet}
+
+Body excerpt:
+{body}
+
+Respond with ONLY one of these categories:
+- RECEIPT (order confirmations, payment receipts, invoices, shipping notifications)
+- COLD_OUTREACH (unsolicited sales, partnership proposals, recruitment spam, cold emails from strangers)
+- NOTIFICATION (automated alerts, social media notifications, service updates, account activity)
+- NEEDS_ATTENTION (emails requiring a response or action from a real person you know or do business with)
+- OTHER (anything that doesn't clearly fit the above categories)"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[
+                    {
+                        'role': 'system',
+                        'content': (
+                            'You are an email classifier. Classify emails into exactly one category. '
+                            'When uncertain, choose NEEDS_ATTENTION or OTHER — never classify as '
+                            'RECEIPT, COLD_OUTREACH, or NOTIFICATION unless you are confident. '
+                            'The cost of missing an important email is much higher than leaving a '
+                            'junk email in the inbox. Respond with only the category name.'
+                        )
+                    },
+                    {'role': 'user', 'content': prompt}
+                ],
+                max_tokens=10,
+                temperature=0
+            )
+
+            result = response.choices[0].message.content.strip().upper()
+
+            for category in ['RECEIPT', 'COLD_OUTREACH', 'NOTIFICATION', 'NEEDS_ATTENTION']:
+                if category in result:
+                    return category
+            return 'OTHER'
+
+        except Exception as e:
+            print(f"General classification error: {e}")
+            return 'OTHER'  # Default to OTHER on error (don't archive)
+
     def classify_job_application(self, email: Dict) -> Dict[str, bool]:
         """
         Classify if email is job-related and needs follow-up.
