@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any
 
 from gmail_service import GmailService, GmailTokenExpiredError
-from classifier import EmailClassifier
+from classifier import EmailClassifier, ClassificationError
 from database import Database
 from rule_filters import apply_rules
 
@@ -38,7 +38,8 @@ def run_general_cleanup(
     result = {
         'processed': 0, 'skipped': 0,
         'rule_filtered': 0, 'ai_classified': 0,
-        'archived': 0, 'error': None,
+        'archived': 0, 'classification_failures': 0,
+        'quota_exhausted': False, 'error': None,
     }
 
     # Look up labels
@@ -136,6 +137,14 @@ def run_general_cleanup(
 
                 except GmailTokenExpiredError:
                     raise
+                except ClassificationError as e:
+                    # Not recorded in DB — will be retried next cycle
+                    result['classification_failures'] += 1
+                    if e.quota_exhausted:
+                        logger.error(f"[{account_name}] OpenAI quota exhausted — aborting general cleanup")
+                        result['quota_exhausted'] = True
+                        result['error'] = 'OpenAI quota exhausted'
+                        return result
                 except Exception as e:
                     logger.error(f"[{account_name}]   Error processing {email['id']}: {e}")
 
