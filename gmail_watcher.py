@@ -111,6 +111,7 @@ class GmailWatcher(rumps.App):
 
         toggles = get_feature_toggles()
         has_errors = False
+        quota_exhausted = False
 
         try:
             classifier = EmailClassifier()
@@ -127,11 +128,15 @@ class GmailWatcher(rumps.App):
             account_toggles = toggles.get(name, {})
 
             try:
-                error = self._process_account(
+                error, quota = self._process_account(
                     name, email, account_toggles, classifier
                 )
                 if error:
                     has_errors = True
+                if quota:
+                    quota_exhausted = True
+                    logger.error("OpenAI quota exhausted — skipping remaining accounts")
+                    break
             except FuturesTimeoutError:
                 logger.error(f"[{name}] Account cleanup timed out after {ACCOUNT_TIMEOUT}s — skipping")
                 has_errors = True
@@ -142,7 +147,15 @@ class GmailWatcher(rumps.App):
         now = datetime.now()
         self.last_run_item.title = f"Last Run: {now.strftime('%m/%d %H:%M')}"
 
-        if has_errors:
+        if quota_exhausted:
+            self.title = "\u26A0\uFE0F"  # warning sign
+            self.status_item.title = "Status: OpenAI quota exhausted"
+            self._notify(
+                "Gmail Inbox Helper",
+                "OpenAI quota exhausted - emails are not being classified. "
+                "Add credits, then they'll be retried next cycle."
+            )
+        elif has_errors:
             self.title = "\u26A0\uFE0F"  # ⚠️
             self.status_item.title = "Status: Completed with errors"
         else:
@@ -154,8 +167,26 @@ class GmailWatcher(rumps.App):
         self.is_processing = False
 
     def _process_account(self, name, account_email, account_toggles, classifier):
-        """Process a single account with a timeout guard. Returns True if errors occurred."""
+        """Process a single account with a timeout guard.
+
+        Returns (has_errors, quota_exhausted).
+        """
         has_errors = False
+        quota_exhausted = False
+
+        def _check_stage_result(result):
+            """Record stage errors; returns True if the OpenAI quota is exhausted."""
+            nonlocal has_errors, quota_exhausted
+            if result.get('error') or result.get('classification_failures'):
+                has_errors = True
+            if result.get('classification_failures'):
+                logger.error(
+                    f"[{name}] {result['classification_failures']} emails failed AI "
+                    f"classification — they will be retried next cycle"
+                )
+            if result.get('quota_exhausted'):
+                quota_exhausted = True
+            return quota_exhausted
 
         def _do_work():
             nonlocal has_errors
@@ -208,8 +239,8 @@ class GmailWatcher(rumps.App):
                         f"[{name}] Marketing: {result['processed']} processed, "
                         f"{result['skipped']} skipped, {result['marketing_found']} marketing archived"
                     )
-                    if result.get('error'):
-                        has_errors = True
+                    if _check_stage_result(result):
+                        return
                 else:
                     logger.info(f"[{name}] Marketing cleanup disabled")
 
@@ -226,8 +257,8 @@ class GmailWatcher(rumps.App):
                         f"{result['skipped']} skipped, {result['job_related_found']} job-related, "
                         f"{result['needs_followup_found']} need follow-up"
                     )
-                    if result.get('error'):
-                        has_errors = True
+                    if _check_stage_result(result):
+                        return
                 else:
                     logger.info(f"[{name}] Job app cleanup disabled")
 
@@ -244,8 +275,8 @@ class GmailWatcher(rumps.App):
                         f"{result['skipped']} skipped, {result['rule_filtered']} rule-filtered, "
                         f"{result['ai_classified']} AI-classified, {result['archived']} archived"
                     )
-                    if result.get('error'):
-                        has_errors = True
+                    if _check_stage_result(result):
+                        return
                 else:
                     logger.info(f"[{name}] General cleanup disabled")
             finally:
@@ -256,7 +287,18 @@ class GmailWatcher(rumps.App):
             future = executor.submit(_do_work)
             future.result(timeout=ACCOUNT_TIMEOUT)
 
-        return has_errors
+        return has_errors, quota_exhausted
+
+    def _notify(self, title, message):
+        """Show a macOS notification. Best-effort — never raises."""
+        try:
+            subprocess.run(
+                ['osascript', '-e',
+                 f'display notification "{message}" with title "{title}"'],
+                timeout=10, check=False,
+            )
+        except Exception as e:
+            logger.error(f"Failed to show notification: {e}")
 
     def update_next_run(self):
         if self.next_run_time:

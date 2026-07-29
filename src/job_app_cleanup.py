@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any
 
 from gmail_service import GmailService, GmailTokenExpiredError
-from classifier import EmailClassifier
+from classifier import EmailClassifier, ClassificationError
 from database import Database
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,13 @@ def run_job_app_cleanup(
     """
     Run job application email cleanup for a single account.
 
-    Returns dict with keys: processed, skipped, job_related_found, needs_followup_found, error
+    Returns dict with keys: processed, skipped, job_related_found, needs_followup_found,
+    classification_failures, quota_exhausted, error
     """
     result = {
         'processed': 0, 'skipped': 0,
         'job_related_found': 0, 'needs_followup_found': 0,
+        'classification_failures': 0, 'quota_exhausted': False,
         'error': None
     }
 
@@ -105,6 +107,14 @@ def run_job_app_cleanup(
 
                 except GmailTokenExpiredError:
                     raise
+                except ClassificationError as e:
+                    # Not recorded in DB — will be retried next cycle
+                    result['classification_failures'] += 1
+                    if e.quota_exhausted:
+                        logger.error(f"[{account_name}] OpenAI quota exhausted — aborting job app cleanup")
+                        result['quota_exhausted'] = True
+                        result['error'] = 'OpenAI quota exhausted'
+                        return result
                 except Exception as e:
                     logger.error(f"[{account_name}]   Error processing {email['id']}: {e}")
 

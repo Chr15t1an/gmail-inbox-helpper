@@ -1,8 +1,24 @@
 """Email classification using OpenAI GPT-4o-mini."""
 
+import logging
 import os
 from typing import Dict
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+
+class ClassificationError(Exception):
+    """AI classification failed. The email was NOT classified and should be retried next cycle."""
+
+    def __init__(self, message: str, quota_exhausted: bool = False):
+        super().__init__(message)
+        self.quota_exhausted = quota_exhausted
+
+
+def _to_classification_error(e: Exception) -> ClassificationError:
+    quota_exhausted = getattr(e, 'code', None) == 'insufficient_quota'
+    return ClassificationError(str(e), quota_exhausted=quota_exhausted)
 
 
 class EmailClassifier:
@@ -62,8 +78,8 @@ Is this a MARKETING email or a PERSONAL email?"""
             return 'MARKETING' if 'MARKETING' in result else 'PERSONAL'
 
         except Exception as e:
-            print(f"Classification error: {e}")
-            return 'PERSONAL'  # Default to personal on error (don't archive)
+            logger.error(f"Marketing classification error: {e}")
+            raise _to_classification_error(e)
 
     def classify_general(self, email: Dict) -> str:
         """
@@ -120,8 +136,8 @@ Respond with ONLY one of these categories:
             return 'OTHER'
 
         except Exception as e:
-            print(f"General classification error: {e}")
-            return 'OTHER'  # Default to OTHER on error (don't archive)
+            logger.error(f"General classification error: {e}")
+            raise _to_classification_error(e)
 
     def classify_job_application(self, email: Dict) -> Dict[str, bool]:
         """
@@ -200,5 +216,5 @@ Respond with ONLY one of these exact formats:
                 return {'is_job_related': False, 'needs_followup': False}
 
         except Exception as e:
-            print(f"Classification error: {e}")
-            return {'is_job_related': False, 'needs_followup': False}
+            logger.error(f"Job application classification error: {e}")
+            raise _to_classification_error(e)
