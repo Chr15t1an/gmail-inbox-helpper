@@ -17,8 +17,12 @@ From address unless a subject condition is given.
 | `@facebookmail.com` | NOTIFICATION | `AI Assist` | Yes | Messenger and Facebook notifications |
 | `noreply@github.com` | NOTIFICATION | `github` | Yes | Uses the existing `github` label, not `AI Assist` |
 | `gitlab@mg.gitlab.com` | NOTIFICATION | `AI Assist` | Yes | |
-| `no-reply@accounts.google.com` **and** subject contains `security alert` **and** the subject does *not* name this account's own address | NOTIFICATION | — | Yes | A security alert about *this* mailbox is never archived — it stays and is `NEEDS_ATTENTION` |
+| `no-reply@accounts.google.com` **and** subject contains `security alert` **and** neither the subject nor the snippet/body names this account's own address | NOTIFICATION | — | Yes | Google puts the affected address in the **body**, not the subject. If the body names this mailbox, the rule does not fire and the message is `NEEDS_ATTENTION`. When the body cannot be read, do not fire. |
 | From contains `airbnb` | *(unchanged)* | `AirBnb` | *(unchanged)* | Labelling rule only — adds the label, then classification proceeds normally |
+| `donotreply@upwork.com` **and** subject starts with `New job alert` | MARKETING | `AI Assist` | Yes | Job-board broadcast. Other Upwork mail (proposals, messages, account) still goes to classification |
+| `jobs-noreply@linkedin.com` **and** subject contains `your application was sent to` | JOB_APP_NO_ACTION | `Job Application` | Yes | `job_apps: true` accounts only; elsewhere NOTIFICATION with no label |
+| `hello@reach.jobs` | MARKETING | `AI Assist` | Yes | Auto-apply platform nudges; the user is not using it |
+| `@trymanagertools.com`, `@managertools.xyz`, `@fireandpipeco.com` | NOTIFICATION | — | Yes | Christian's own products' test traffic (send_wave.py sends, intake autoreplies, Resend checks). The tools that generate these do not read the inbox |
 
 Rules that add a label without deciding the archive question, like the Airbnb one, are marked
 *(unchanged)* and fall through to classification.
@@ -84,6 +88,8 @@ email is a broken one.
 ## Change log
 
 Append a line here whenever review mode changes this file, so the reasoning survives.
+
+- *(2026-09-07)* Dry run on chri5tian (88 threads). **Fixed** the Google security-alert rule: it matched on the subject only and would have archived a "new sign-in" alert about this very mailbox (the Python watcher has the same defect, `src/rule_filters.py:35`). **Added** four sender rules covering 46 of the 88: Upwork job alerts, LinkedIn application receipts, Reach nudges, and own-product test domains — the last one on Christian's say-so.
 
 - *(2026-09-07)* No rule changes. Audit noted the Gmail tools take label IDs, not names — `SKILL.md` now says to resolve them via `list_labels` first.
 - *(2026-09-01)* Seeded from `src/rule_filters.py` and the three prompts in `src/classifier.py` of the

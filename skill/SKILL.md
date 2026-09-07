@@ -70,7 +70,7 @@ Identical to sweep through step 5, then stop. Print one table — sender, subjec
 
    `rules.md` holds the full definition of each category and the edge cases. Read it rather than working from the table alone.
 
-5. **The uncertainty rule, which outranks everything above:** when you are not confident, choose `NEEDS_ATTENTION` or `OTHER`. Never assign `MARKETING`, `RECEIPT`, `NOTIFICATION`, or `COLD_OUTREACH` on a guess. Missing a real email costs the user far more than leaving junk in the inbox for another six hours. If a batch comes back with more than about a third of its messages archived-by-category and the mailbox does not obviously warrant it, stop and report rather than acting.
+5. **The uncertainty rule, which outranks everything above:** when you are not confident, choose `NEEDS_ATTENTION` or `OTHER`. Never assign `MARKETING`, `RECEIPT`, `NOTIFICATION`, or `COLD_OUTREACH` on a guess. Missing a real email costs the user far more than leaving junk in the inbox for another six hours. If a batch comes back with more than about a third of its messages archived-by-category and the mailbox does not obviously warrant it, stop and report rather than acting. **Exception: the first sweep on a mailbox** — when `AI/reviewed` has zero messages, the queue is a backlog and a high archive share is expected; run the dry run instead, and let the user confirm it, which is what waives the check.
 
 6. **Apply the actions.** Add the category label and `AI/reviewed` in one `update_message_labels` call per message, removing `INBOX` in the same call when the category archives. Prefer thread-level operations when every message in the thread got the same verdict.
 
