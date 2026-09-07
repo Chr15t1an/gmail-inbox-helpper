@@ -31,10 +31,17 @@ def apply_rules(email: Dict, account_email: str) -> Optional[Tuple[str, str, str
     if 'gitlab@mg.gitlab.com' in from_addr:
         return ('NOTIFICATION', 'label_and_archive', 'gitlab_notification')
 
-    # Google security alerts for OTHER accounts (not this one)
+    # Google security alerts for OTHER accounts (not this one).
+    # Google puts the affected address in the BODY, not the subject ("Security alert" /
+    # "A new sign-in on Mac OS hello@…"). Until 2026-09-07 this checked the subject only and
+    # archived alerts about the very account being processed. Check everything we have, and
+    # if we have nothing beyond the subject, do not fire — keeping a stray alert is cheap.
     if 'no-reply@accounts.google.com' in from_addr and 'security alert' in subject:
-        # Only archive if the alert is for a different email address
-        if account_email.lower() not in subject:
+        haystack = ' '.join(
+            (email.get(k) or '') for k in ('subject', 'snippet', 'body')
+        ).lower()
+        has_text = bool((email.get('snippet') or email.get('body') or '').strip())
+        if has_text and account_email.lower() not in haystack:
             return ('NOTIFICATION', 'archive', 'google_security_other')
 
     return None

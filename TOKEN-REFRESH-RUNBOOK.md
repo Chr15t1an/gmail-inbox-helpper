@@ -2,12 +2,13 @@
 
 ## Why This Is Needed
 
-Google OAuth tokens expire after **7 days** when the app is in "Testing" mode. Moving to Production requires a $500-4500/year security audit (CASA), so we stay in Testing mode and refresh tokens weekly.
+Google documents that OAuth tokens expire after **7 days** when the app is in "Testing" mode. Moving to Production requires a $500-4500/year security audit (CASA), so we stay in Testing mode.
+
+**Observed (2026-09-07):** the three tokens generated in February 2026 still refresh and authenticate seven months later. Whatever the documentation says, this runbook is for *when a token actually fails*, not a weekly chore. The pre-2026-09-07 version of this file told you to refresh every Sunday; that was never necessary.
 
 ## When To Refresh
 
-- Tokens expire every 7 days
-- Set a weekly reminder (e.g., every Sunday)
+- Only when a token actually fails — see the observed note above
 - If you see `Token expired` errors in `watcher.log`, tokens need refreshing
 
 ## Refresh Process

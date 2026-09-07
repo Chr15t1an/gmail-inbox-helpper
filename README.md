@@ -47,7 +47,7 @@ You need OAuth 2.0 credentials so the app can access your Gmail. Follow Google's
 
 For more detail, see [Google's Python quickstart](https://developers.google.com/gmail/api/quickstart/python).
 
-> **Note:** While your app is in Google's "Testing" mode, OAuth tokens expire every 7 days. You'll need to regenerate them weekly. See [TOKEN-REFRESH-RUNBOOK.md](TOKEN-REFRESH-RUNBOOK.md) for instructions. Moving to "Production" mode removes this limit but requires Google's verification process.
+> **Note:** Google documents that OAuth refresh tokens for apps in "Testing" mode expire after 7 days. **In practice the tokens generated 2026-02-05 were still refreshing on 2026-09-07 with no intervention.** If a `Token expired` error ever appears, [TOKEN-REFRESH-RUNBOOK.md](TOKEN-REFRESH-RUNBOOK.md) has the regeneration steps; do not schedule a weekly refresh on the strength of the documented limit alone.
 
 ### 3. Configure `.env`
 
@@ -120,7 +120,7 @@ Menu options: **Run Now** (trigger immediately), **View Logs** (open `watcher.lo
 
 ## Token Refresh
 
-Because the app runs in Google's "Testing" mode, tokens expire every 7 days. When they do, you'll see `Token expired` in the logs and the ⚠️ icon.
+Google says "Testing"-mode tokens expire every 7 days; ours have run for seven months without doing so (verified 2026-09-07). If they ever do, you'll see `Token expired` in the logs and the ⚠️ icon.
 
 To refresh, re-run `python scripts/generate_token.py` for the affected account and save the new token. See [TOKEN-REFRESH-RUNBOOK.md](TOKEN-REFRESH-RUNBOOK.md) for the full process.
 
