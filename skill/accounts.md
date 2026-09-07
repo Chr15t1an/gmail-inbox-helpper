@@ -29,10 +29,11 @@ touches accounts owned by `skill`; the watcher's `.env` toggles are set false fo
 ## campbell — campbellchristian36@gmail.com
 
 - `connected`: true (token 3, verified 2026-09-07)
-- `owner`: watcher
+- `owner`: **skill** (since 2026-09-07; watcher toggles off)
 - `job_apps`: false
 - `max_per_run`: 150
-- Personal mail. The highest-volume marketing account of the three.
+- Personal mail. The highest-volume marketing account of the three. Also the account where family,
+  church, medical, and financial-advisor mail lands — the `never_archive` list matters most here.
 
 ## never_archive
 
