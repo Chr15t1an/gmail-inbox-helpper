@@ -7,13 +7,13 @@ database. Drafted 2026-09-01; the Python watcher is still the thing actually run
 
 | | Python watcher | This skill |
 |---|---|---|
-| Gmail access | OAuth app, `credentials.json`, per-account tokens, 7-day expiry | The Gmail connector. No setup, no expiry. |
+| Gmail access | OAuth app, `credentials.json`, per-account tokens | The same tokens, through `scripts/gmail_cli.py`. The Gmail MCP connector turned out read-only and single-account. |
 | Scheduling | `rumps` menu bar app, sleep loop, PID file, start/stop scripts, timeout guards | A routine with a cron expression |
 | Dedupe state | SQLite at `data/gmail_helper.db` | The `AI/reviewed` Gmail label |
 | Classification | Three prompts frozen in `src/classifier.py`, one API call per email | One taxonomy in `rules.md`, batched 25 at a time |
 | Passes over the inbox | Three (marketing, job apps, general), each re-listing the inbox | One |
 | Learning | None possible — the prompts are string literals | `rules.md` plus the weekly review mode |
-| Setup for a new person | Google Cloud project, OAuth consent screen, test users, credentials download, per-account token generation, weekly refresh | Connect Gmail, edit `accounts.md` |
+| Setup for a new person | Google Cloud project, OAuth consent screen, test users, credentials download, per-account token generation, weekly refresh | Same OAuth setup once (`scripts/generate_token.py`), then edit `accounts.md`. The weekly refresh has not been needed in practice |
 | Lines to maintain | ~1,500 | 4 markdown files |
 
 The unification of the three passes into one is worth calling out separately: the current watcher fetches

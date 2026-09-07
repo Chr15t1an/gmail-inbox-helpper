@@ -13,13 +13,25 @@ Three modes:
 
 ## Prerequisites
 
-A connected Gmail account. Check with `list_labels` before doing anything else — if the Gmail tools are not available, stop and tell the user to connect the Gmail connector. There is no OAuth setup, no credentials file, and no token to refresh.
+Gmail access comes from **this repo's own OAuth tokens**, through `scripts/gmail_cli.py`. Those tokens carry `gmail.modify` for all three accounts and have refreshed without intervention since February 2026 — the "7-day expiry" in `TOKEN-REFRESH-RUNBOOK.md` has not been observed in practice. The Gmail MCP connector is read-only and reaches one account; use it for ad-hoc reading only, never for a sweep.
 
-**One connector is one mailbox.** The Gmail tools speak for exactly one account per session. Confirm which one by reading the `toRecipients` of any inbox thread, and only sweep the entry in `accounts.md` whose address matches. If the connected account is not in `accounts.md`, stop and say so. Never assume the other accounts are reachable.
+```bash
+ROOT=/Users/christian/Documents/GitHub/gmail-inbox-helpper
+PY=$ROOT/venv/bin/python
+$PY $ROOT/scripts/gmail_cli.py --root $ROOT profile <account>        # proves the token works; do this first
+$PY $ROOT/scripts/gmail_cli.py --root $ROOT labels <account>         # name → id map
+$PY $ROOT/scripts/gmail_cli.py --root $ROOT search <account> --query '...' --max 150
+$PY $ROOT/scripts/gmail_cli.py --root $ROOT ensure-label <account> 'AI/reviewed'
+$PY $ROOT/scripts/gmail_cli.py --root $ROOT apply <account> --plan plan.json --dry-run   # then without --dry-run
+```
 
-**The connector may be read-only.** If `create_label`, `update_message_labels`, or `label_thread` returns "This connector requires additional permissions", every write will. Stop before acting on anything, report the dry-run verdicts, and tell the user to reconnect the Gmail connector with modify access. Do not fall back to a partial sweep.
+`<account>` is the `ACCOUNT_N_NAME` from `.env` (`conveyour`, `chri5tian`, `campbell`). If `profile` fails with a token error, stop and follow the runbook; do not fall back to the connector for writes.
 
-**Labels are addressed by ID, not name.** `search_threads`, `update_message_labels`, and `label_thread` all take label IDs (`Label_1`, not `AI Assist`). Call `list_labels` once at the start of every run and build a name → ID map. Every `label:` clause in the queries below means the ID. Create any missing label with `create_label` and re-list.
+**Labels are addressed by ID, not name.** Every `label:` clause in the queries below means the ID from `labels`. Create any missing label with `ensure-label`, which returns the id.
+
+**The plan file is the unit of action.** Build one JSON list — `{"threadId", "add": [ids], "remove": [ids], "note": "CATEGORY|rule-or-ai"}` per thread — run it with `--dry-run`, check the counts, then run it for real. `apply` prints one result row per message with sender and subject; that output is what gets written to `decisions/`.
+
+**Auto mode blocks these writes.** Claude Code's auto-mode classifier refuses Bash commands that create labels or modify messages through the token. Running the sweep needs either a permission rule for `scripts/gmail_cli.py` or the user running the `ensure-label` and `apply` commands themselves. Prepare the plan, dry-run it, then hand over the exact command.
 
 Two config files live next to this one:
 
@@ -74,7 +86,7 @@ Identical to sweep through step 5, then stop. Print one table — sender, subjec
 
 5. **The uncertainty rule, which outranks everything above:** when you are not confident, choose `NEEDS_ATTENTION` or `OTHER`. Never assign `MARKETING`, `RECEIPT`, `NOTIFICATION`, or `COLD_OUTREACH` on a guess. Missing a real email costs the user far more than leaving junk in the inbox for another six hours. If a batch comes back with more than about a third of its messages archived-by-category and the mailbox does not obviously warrant it, stop and report rather than acting. **Exception: the first sweep on a mailbox** — when `AI/reviewed` has zero messages, the queue is a backlog and a high archive share is expected; run the dry run instead, and let the user confirm it, which is what waives the check.
 
-6. **Apply the actions.** Add the category label and `AI/reviewed` in one `update_message_labels` call per message, removing `INBOX` in the same call when the category archives. Prefer thread-level operations when every message in the thread got the same verdict.
+6. **Apply the actions.** One plan entry per thread: add the category label and `AI/reviewed`, remove `INBOX` when the category archives, and remove any stale category labels a previous pass left behind. `apply` modifies every message in the thread with one `messages.modify` call each.
 
 7. **Log the decisions** to `decisions/YYYY-MM.md` next to this skill — one line per message: date, account, category, rule name or `ai`, sender, truncated subject. Append; never rewrite. This is the only record of why something was archived, and review mode reads it.
 

@@ -3,13 +3,12 @@
 Which mailboxes to sweep, and what is enabled for each. Replace this file entirely when setting the skill
 up for someone else — it is the only file with personal configuration in it.
 
-One Gmail connector reaches one mailbox. As of 2026-09-07 the connector in Claude Code is on
-**hello@chri5tian.com** only; the other two accounts below are listed for when they get a connector of
-their own and are marked `connected: false`. The skill only sweeps accounts marked `connected: true`.
+Access is through this repo's OAuth tokens (`tokens/N.json`, see `SKILL.md`), so all three accounts
+are reachable. `connected` records whether `profile` succeeded on the last check.
 
 ## conveyour — christianc@conveyour.com
 
-- `connected`: **false** — no connector; still handled by the Python watcher when it runs
+- `connected`: true (token 1, verified 2026-09-07)
 - `job_apps`: false
 - `max_per_run`: 150
 - Work mail. Bias toward keeping: an unfamiliar sender at a work address is far more likely to matter than
@@ -17,7 +16,7 @@ their own and are marked `connected: false`. The skill only sweeps accounts mark
 
 ## chri5tian — hello@chri5tian.com
 
-- `connected`: **true**
+- `connected`: true (token 2, verified 2026-09-07)
 - `job_apps`: **true**
 - `max_per_run`: 150
 - The account that receives job correspondence and freelance inquiries. Upwork and job-board *alerts* are
@@ -25,7 +24,7 @@ their own and are marked `connected: false`. The skill only sweeps accounts mark
 
 ## campbell — campbellchristian36@gmail.com
 
-- `connected`: **false** — no connector; still handled by the Python watcher when it runs
+- `connected`: true (token 3, verified 2026-09-07)
 - `job_apps`: false
 - `max_per_run`: 150
 - Personal mail. The highest-volume marketing account of the three.
