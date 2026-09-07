@@ -85,6 +85,7 @@ email is a broken one.
 
 Append a line here whenever review mode changes this file, so the reasoning survives.
 
+- *(2026-09-07)* No rule changes. Audit noted the Gmail tools take label IDs, not names — `SKILL.md` now says to resolve them via `list_labels` first.
 - *(2026-09-01)* Seeded from `src/rule_filters.py` and the three prompts in `src/classifier.py` of the
   Python watcher. No behavioural changes yet — the sender rules and taxonomy are as the Python ran them,
   with the marketing, job-app, and general passes unified into one category list.
