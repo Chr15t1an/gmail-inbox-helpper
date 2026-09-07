@@ -27,11 +27,11 @@ $PY $ROOT/scripts/gmail_cli.py --root $ROOT apply <account> --plan plan.json --d
 
 `<account>` is the `ACCOUNT_N_NAME` from `.env` (`conveyour`, `chri5tian`, `campbell`). If `profile` fails with a token error, stop and follow the runbook; do not fall back to the connector for writes.
 
-**Labels are addressed by ID, not name.** Every `label:` clause in the queries below means the ID from `labels`. Create any missing label with `ensure-label`, which returns the id.
+**Labels: names in queries, IDs in plans.** The Gmail search syntax used by `search --query` takes label *names* with spaces written as hyphens — `label:AI/reviewed`, `label:AI-Assist`, `label:Needs-Attention`; an ID (`label:Label_6`) or a quoted name (`label:"AI Assist"`) silently returns nothing. Plan files (`add`/`remove`) take label *IDs* from `labels`, or `name:<label>` which `apply` resolves. Create any missing label with `ensure-label`, which returns the id. Verified 2026-09-07.
 
 **The plan file is the unit of action.** Build one JSON list — `{"threadId", "add": [ids], "remove": [ids], "note": "CATEGORY|rule-or-ai"}` per thread — run it with `--dry-run`, check the counts, then run it for real. `apply` prints one result row per message with sender and subject; that output is what gets written to `decisions/`.
 
-**Auto mode blocks these writes.** Claude Code's auto-mode classifier refuses Bash commands that create labels or modify messages through the token. Running the sweep needs either a permission rule for `scripts/gmail_cli.py` or the user running the `ensure-label` and `apply` commands themselves. Prepare the plan, dry-run it, then hand over the exact command.
+**Auto mode blocks these writes.** Claude Code's auto-mode classifier refuses Bash commands that create labels or modify messages through the token, even with a matching allow rule in the main checkout's `settings.local.json` (worktree sessions do not load it). Prepare the plan, dry-run it, then ask Christian to switch to bypass-permissions mode for the `apply` — that is how the first sweep ran on 2026-09-07.
 
 Two config files live next to this one:
 
