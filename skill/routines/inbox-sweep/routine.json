@@ -1,6 +1,6 @@
 {
   "taskId": "inbox-sweep",
-  "cronExpression": "0 */6 * * *",
+  "cronExpression": "0 7 * * *",
   "cwd": "/Users/christian/Documents/GitHub/gmail-inbox-helpper",
   "enabled": false
 }

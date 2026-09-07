@@ -27,7 +27,7 @@ times. One pass, one verdict.
   `src/rule_filters.py` and the prompts in `src/classifier.py`.
 - `accounts.md` — which mailboxes, what is enabled, and the `never_archive` override. The only file with
   personal config; replace it wholesale when sharing.
-- `routines/inbox-sweep/` — every 6 hours, matching the watcher's `CHECK_INTERVAL`. Ships disabled.
+- `routines/inbox-sweep/` — daily at 07:00. Ships disabled here; the live copy is registered from christians-claude-skills.
 - `routines/inbox-review/` — weekly, Monday 08:00. The feedback loop. Ships disabled.
 - `decisions/` — append-only monthly logs of what was archived and why. Review mode reads these.
 
