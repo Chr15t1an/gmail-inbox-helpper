@@ -1,0 +1,6 @@
+{
+  "taskId": "inbox-review",
+  "cronExpression": "0 8 * * 1",
+  "cwd": "/Users/christian/Documents/GitHub/gmail-inbox-helpper",
+  "enabled": false
+}
