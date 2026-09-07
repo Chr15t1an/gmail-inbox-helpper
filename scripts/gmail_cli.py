@@ -79,8 +79,24 @@ def cmd_apply(svc, a):
     plan = json.loads(Path(a.plan).read_text())
     api = svc.service.users()
     results = []
+    # Entries may name a label as "name:AI/reviewed"; resolve (creating if needed) once per run.
+    # On a dry run nothing is created — the name is left as-is so the plan stays inspectable.
+    resolved = {}
+
+    def _ids(items):
+        out = []
+        for x in items:
+            if x.startswith('name:'):
+                nm = x[5:]
+                if nm not in resolved:
+                    resolved[nm] = x if a.dry_run else svc.get_or_create_label(nm)['labelId']
+                out.append(resolved[nm])
+            else:
+                out.append(x)
+        return out
+
     for entry in plan:
-        add, remove = entry.get('add', []), entry.get('remove', [])
+        add, remove = _ids(entry.get('add', [])), _ids(entry.get('remove', []))
         if 'threadId' in entry:
             t = api.threads().get(userId='me', id=entry['threadId'], format='metadata',
                                   metadataHeaders=['From', 'Subject', 'Date']).execute()
