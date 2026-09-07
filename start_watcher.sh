@@ -30,6 +30,16 @@ fi
 # Start watcher
 echo "Starting Gmail Inbox Helper watcher..."
 source venv/bin/activate
+
+# The classifier needs OPENAI_API_KEY. It lives in ~/.zshrc, which a non-interactive launch
+# (Claude Code, launchd, cron) does not source — pull it in if it is missing.
+if [ -z "$OPENAI_API_KEY" ] && [ -f "$HOME/.zshrc" ]; then
+    eval "$(grep '^export OPENAI_API_KEY=' "$HOME/.zshrc")"
+fi
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo "OPENAI_API_KEY is not set and was not found in ~/.zshrc — the watcher would start without AI classification."
+    exit 1
+fi
 nohup python3 gmail_watcher.py > /dev/null 2>&1 &
 PID=$!
 echo $PID > watcher.pid
