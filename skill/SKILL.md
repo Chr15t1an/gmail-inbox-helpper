@@ -17,6 +17,8 @@ A connected Gmail account. Check with `list_labels` before doing anything else â
 
 **One connector is one mailbox.** The Gmail tools speak for exactly one account per session. Confirm which one by reading the `toRecipients` of any inbox thread, and only sweep the entry in `accounts.md` whose address matches. If the connected account is not in `accounts.md`, stop and say so. Never assume the other accounts are reachable.
 
+**The connector may be read-only.** If `create_label`, `update_message_labels`, or `label_thread` returns "This connector requires additional permissions", every write will. Stop before acting on anything, report the dry-run verdicts, and tell the user to reconnect the Gmail connector with modify access. Do not fall back to a partial sweep.
+
 **Labels are addressed by ID, not name.** `search_threads`, `update_message_labels`, and `label_thread` all take label IDs (`Label_1`, not `AI Assist`). Call `list_labels` once at the start of every run and build a name â†’ ID map. Every `label:` clause in the queries below means the ID. Create any missing label with `create_label` and re-list.
 
 Two config files live next to this one:
