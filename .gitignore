@@ -30,3 +30,6 @@ tokens/
 # Watcher runtime files
 watcher.pid
 watcher.log
+
+# per-run sweep plans and results (message ids, subjects)
+data/plans/
